@@ -1,0 +1,21 @@
+{
+  "simulator": "NVIDIA Isaac Sim",
+  "release": "6.2.0",
+  "observed_build": "6.2.0-rc.14+release.52805.02189a84.gl",
+  "installation_method": "Linux x86_64 workstation ZIP",
+  "install_path_environment_variable": "ISAAC_SIM_PATH",
+  "python": "3.12.14 (bundled)",
+  "torch": "2.11.0+cu128 (bundled deprecated ML archive)",
+  "cuda_runtime": "12.8.90 (bundled isaacsim.pip.nv)",
+  "launch_script": "scripts/launch_isaacsim.sh",
+  "verification": {
+    "date": "2026-10-28",
+    "isolated_torch_gpu_calculation": "passed",
+    "full_headless_startup": "timed out after 300 seconds; no CUDA symbol import error",
+    "gui_operation": "standalone window/render loop passed; full editor and visual inspection unchecked",
+    "robot_replay": "SO-101 deterministic headless shoulder and windowed wrist control demos passed; commanded/measured logging verified",
+    "standalone_startup": "passed with MinimalRendering",
+    "file_trajectory_replay": "passed headless on 2026-10-28: 481 offline reference samples with reversed joint columns, 963 measured samples over 8.0166667 seconds; every held command matched the saved file after mapping by name"
+  },
+  "scope": "Runtime record plus standalone SO-101 control and file replay checks. See configs/dummy-trajectory.json, configs/so101-demo.json and README for model, scene, timing and unchecked validation properties."
+}

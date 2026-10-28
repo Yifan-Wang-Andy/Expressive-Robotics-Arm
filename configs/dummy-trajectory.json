@@ -1,0 +1,15 @@
+{
+  "schema_version": "dummy-trajectory-config/1",
+  "urdf": "assets/downloaded/SO-ARM100/Simulation/SO101/so101_new_calib.urdf",
+  "source_repository": "https://github.com/TheRobotStudio/SO-ARM100",
+  "source_license": "Apache-2.0",
+  "joint": "shoulder_pan",
+  "offset_rad": 0.2,
+  "move_seconds": 4.0,
+  "physics_hz": 120,
+  "control_hz": 60,
+  "reference_velocity_limit_rad_s": 0.5,
+  "reference_acceleration_limit_rad_s2": 1.0,
+  "position_margin_rad": 0.02,
+  "settings_provenance": "Project-selected dummy reference limits, not manufacturer ratings. Deterministic quintic out-and-back; all other joints, including the gripper, hold zero."
+}

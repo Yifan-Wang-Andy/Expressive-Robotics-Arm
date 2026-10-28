@@ -1,0 +1,44 @@
+# Python/build/test artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+
+# Environments belong outside the shared research folder
+.venv/
+venv/
+env/
+
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.local.yaml
+*.local.yml
+*.local.json
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+
+# Generated experiment artifacts and simulator caches
+/runs/
+/data/raw/
+/data/processed/
+/outputs/
+/recordings/
+/assets/downloaded/
+/logs/
+/cache/
+/.cache/
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db

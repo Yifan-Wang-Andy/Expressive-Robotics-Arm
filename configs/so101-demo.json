@@ -1,0 +1,19 @@
+{
+  "schema_version": "so101-replay-config/1",
+  "urdf": "assets/downloaded/SO-ARM100/Simulation/SO101/so101_new_calib.urdf",
+  "source_repository": "https://github.com/TheRobotStudio/SO-ARM100",
+  "source_license": "Apache-2.0",
+  "physics_hz": 120,
+  "control_hz": 60,
+  "reference_velocity_limit_rad_s": 0.5,
+  "reference_acceleration_limit_rad_s2": 1.0,
+  "position_margin_rad": 0.02,
+  "tracking_error_limit_rad": 0.1,
+  "measured_position_tolerance_rad": 0.01,
+  "stiffness_nm_per_rad": 20.0,
+  "damping_nm_s_per_rad": 1.0,
+  "settings_provenance": "Project-selected replay settings, not calibrated servo gains or manufacturer limits. Reference velocity/acceleration checks use finite differences on the supplied samples; continuous-path proof belongs to the generator. Measured velocity is checked against the URDF limit; measured acceleration is unchecked.",
+  "gripper_policy": "hold zero radians",
+  "scene": "fixed base, meters, Z-up, gravity -9.81 m/s^2, no ground or obstacles",
+  "collision_status": "unchecked; self-collision disabled for this control demonstration"
+}
