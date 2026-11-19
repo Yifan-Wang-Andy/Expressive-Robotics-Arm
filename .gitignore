@@ -29,6 +29,7 @@ env/
 
 # Generated experiment artifacts and simulator caches
 /runs/
+/data/*.csv
 /data/raw/
 /data/processed/
 /outputs/

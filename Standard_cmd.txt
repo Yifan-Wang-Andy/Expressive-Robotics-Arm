@@ -1,0 +1,4 @@
+export ISAAC_SIM_PATH=/home/yifan/isaacsim-6.2.0
+bash scripts/launch_isaacsim.sh --python scripts/control_so101.py \
+  --trajectory runs/my-trajectory \
+  --start-delay 5

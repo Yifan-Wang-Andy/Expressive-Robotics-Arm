@@ -73,6 +73,8 @@ def validate_trajectory(metadata: Mapping[str, Any], arrays: Mapping[str, Any]) 
         raise ValueError("joint_types must identify all six revolute joints")
     if metadata.get("units") != {"time": "seconds", "positions": "radians"}:
         raise ValueError("Trajectory units must be seconds and radians")
+    if metadata.get("initial_pose_policy", "zero") not in ("zero", "first_sample"):
+        raise ValueError("initial_pose_policy must be zero or first_sample")
     hz = _positive_rate(metadata.get("control_hz"), "control_hz")
     # Also reject non-JSON provenance and nonfinite numbers hidden in metadata.
     try:
@@ -171,7 +173,9 @@ def validate_for_replay(
         upper.append(hi - margin)
         applied_velocity.append(min(velocity_limit, speed))
     positions = np.asarray(arrays["positions_rad"], dtype=np.float64)
-    if not np.allclose(positions[0], 0.0, rtol=0, atol=1e-12):
+    if metadata.get("initial_pose_policy", "zero") == "zero" and not np.allclose(
+        positions[0], 0.0, rtol=0, atol=1e-12
+    ):
         raise ValueError("Replay currently requires a zero initial pose")
     if not np.allclose(positions[:, names.index("gripper")], 0.0, rtol=0, atol=1e-12):
         raise ValueError("Replay currently requires the gripper held at zero")

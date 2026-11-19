@@ -1,0 +1,12 @@
+{
+  "schema_version": "so101-waypoints/1",
+  "joint_names": [
+    "shoulder_pan", "shoulder_lift", "elbow_flex",
+    "wrist_flex", "wrist_roll", "gripper"
+  ],
+  "waypoints": [
+    {"time_s": 0.0, "positions_rad": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
+    {"time_s": 4.0, "positions_rad": [0.2, 0.0, 0.0, 0.0, 0.1, 0.0]},
+    {"time_s": 8.0, "positions_rad": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+  ]
+}

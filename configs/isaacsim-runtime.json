@@ -12,10 +12,58 @@
     "date": "2026-10-28",
     "isolated_torch_gpu_calculation": "passed",
     "full_headless_startup": "timed out after 300 seconds; no CUDA symbol import error",
-    "gui_operation": "standalone window/render loop passed; full editor and visual inspection unchecked",
+    "gui_operation": "standalone file replay passed with initial/midpoint viewport captures visually inspected on 2026-10-28; full editor unchecked",
     "robot_replay": "SO-101 deterministic headless shoulder and windowed wrist control demos passed; commanded/measured logging verified",
     "standalone_startup": "passed with MinimalRendering",
-    "file_trajectory_replay": "passed headless on 2026-10-28: 481 offline reference samples with reversed joint columns, 963 measured samples over 8.0166667 seconds; every held command matched the saved file after mapping by name"
+    "file_trajectory_replay": "passed headless on 2026-10-28: 481 offline reference samples with reversed joint columns, 963 measured samples over 8.0166667 seconds; every held command matched the saved file after mapping by name",
+    "windowed_viewing": "passed on 2026-10-28: 0.5x presentation pacing, render-only preview/final hold with unchanged physics time, logs saved before final viewer; post-completion KeyboardInterrupt preserved completed status",
+    "headless_after_viewing_fix": "passed on 2026-10-28: 963 samples; all raw arrays identical to windowed replay",
+    "gray_background": "passed on 2026-10-28: actual offscreen viewport captures using windowed RaytracedLighting path showed gray background; Minimal mode 2 stayed black with the same color, including compositing trials; 963 replay samples",
+    "sun_light": "passed on 2026-11-19: real offscreen replay using the windowed RaytracedLighting path; Sun DistantLight properties checked, initial/midpoint captures visually inspected with lit robot and gray backdrop; 963 replay samples",
+    "scene_selection": "passed on 2026-10-28: 65 offline tests, 11 real USD stage-loading tests, empty and table headless replay plus offscreen RTX table replay; 963 samples per replay; source commands and 120 Hz timing verified; initial/midpoint captures inspected"
   },
-  "scope": "Runtime record plus standalone SO-101 control and file replay checks. See configs/dummy-trajectory.json, configs/so101-demo.json and README for model, scene, timing and unchecked validation properties."
+  "scope": "Runtime record plus standalone SO-101 control and file replay checks. See configs/dummy-trajectory.json, configs/so101-demo.json and README for model, scene, timing and unchecked validation properties.",
+  "replay_viewing": {
+    "lighting": {
+      "type": "distant",
+      "prim_path": "/World/light",
+      "display_name": "Sun",
+      "intensity": 3000,
+      "exposure": 0,
+      "color_rgb": [1, 1, 1],
+      "enable_color_temperature": true,
+      "color_temperature_k": 6500,
+      "angle_deg": 0.53,
+      "rotation_xyz_deg": [
+        -35,
+        -25,
+        0
+      ],
+      "ambient_intensity": 0.3,
+      "ambient_color": [
+        1,
+        1,
+        1
+      ]
+    },
+    "default_start_delay_s": 3.0,
+    "default_playback_speed": 1.0,
+    "keep_window_open_after_export": true,
+    "physics_advances_during_preview_or_final_viewing": false,
+    "headless": "unpaced; exits after export",
+    "background": {
+      "config_key": "background_color_rgb",
+      "default_rgb": [
+        0.65,
+        0.65,
+        0.65
+      ],
+      "source": "color",
+      "composite_after_tonemapping": false,
+      "method": "USD attributes on the active render product after physics initialization"
+    },
+    "windowed_renderer": "RaytracedLighting",
+    "headless_renderer": "RaytracedLighting",
+    "headless_minimal_shading_mode": null
+  }
 }

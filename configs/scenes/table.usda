@@ -1,0 +1,37 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+# Project-authored synthetic environment. The replay script adds the robot,
+# physics scene, and default lighting in a separate layer. The robot stays at
+# the origin. This is a visual example, not a collision-validated experiment.
+def Xform "World"
+{
+    def Xform "Environment"
+    {
+        def Cube "Tabletop" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 1
+            color3f[] primvars:displayColor = [(0.32, 0.42, 0.50)]
+            double3 xformOp:translate = (0, 0, -0.07)
+            double3 xformOp:scale = (0.8, 0.8, 0.04)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        # Visual marker only: no collision API or expressive-state meaning.
+        def Cylinder "TargetMarker"
+        {
+            double radius = 0.035
+            double height = 0.004
+            uniform token axis = "Z"
+            color3f[] primvars:displayColor = [(0.85, 0.38, 0.12)]
+            double3 xformOp:translate = (0.25, 0.10, -0.048)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+}

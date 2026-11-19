@@ -2,7 +2,8 @@
 # Launch the verified Isaac Sim 6.2 workstation build with its own CUDA runtime.
 set -euo pipefail
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+## 1.Deal with help request and exit early, before checking ISAAC_SIM_PATH.
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then  #check if the first argument is --help or -h
     cat <<'EOF'
 Usage: ISAAC_SIM_PATH=/absolute/install/path bash scripts/launch_isaacsim.sh [Isaac Sim options]
        ISAAC_SIM_PATH=/absolute/install/path bash scripts/launch_isaacsim.sh --python [Python arguments]
@@ -15,6 +16,7 @@ EOF
     exit 0
 fi
 
+## 2. Check that ISAAC_SIM_PATH is set to an absolute path and points to a valid Isaac Sim 6.2.0 installation.
 if [[ -z "${ISAAC_SIM_PATH:-}" || "$ISAAC_SIM_PATH" != /* ]]; then
     echo "Set ISAAC_SIM_PATH to the absolute path of the Isaac Sim 6.2.0 installation." >&2
     exit 2
@@ -34,12 +36,14 @@ case "$isaac_version" in
     *) echo "This launch workaround was verified for 6.2.0; found: $isaac_version" >&2; exit 2 ;;
 esac
 
+## 3. Check that the Isaac Sim installation contains the expected bundled CUDA runtime.
 cuda_runtime_dir="$isaac_root/exts/isaacsim.pip.nv/pip_prebundle/nvidia/cuda_runtime/lib"
 if [[ ! -r "$cuda_runtime_dir/libcudart.so.12" ]]; then
     echo "Missing bundled CUDA runtime: $cuda_runtime_dir/libcudart.so.12" >&2
     exit 2
 fi
 
+## 4. Launch Isaac Sim with its own CUDA runtime and without ROS environment setup.
 launcher="$isaac_root/isaac-sim.sh"
 launch_options=(--/isaac/startup/ros_bridge_extension= --/isaac/startup/ros_sim_control_extension=false)
 if [[ "${1:-}" == "--python" ]]; then
@@ -55,6 +59,7 @@ fi
 # A system CUDA 12.0 library can satisfy the soname but miss symbols required
 # by bundled torch 2.11/cu128. Select CUDA 12.8 before Kit/PyTorch load it.
 # Keep these overrides local to this child process; preserve display variables.
+## 5. Unset inherited Python/Conda environment variables to avoid library conflicts.
 unset LD_PRELOAD PYTHONPATH PYTHONHOME PYTHONEXE CONDA_PREFIX CONDA_DEFAULT_ENV VIRTUAL_ENV
 export LD_LIBRARY_PATH="$cuda_runtime_dir"
 export PYTHONNOUSERSITE=1

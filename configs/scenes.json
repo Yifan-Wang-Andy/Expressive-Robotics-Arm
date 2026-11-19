@@ -1,0 +1,15 @@
+{
+  "schema_version": "so101-scenes/1",
+  "scenes": {
+    "empty": {
+      "id": "so101-fixed-empty/1",
+      "description": "Original empty environment; fixed SO-101 at the world origin.",
+      "stage": null
+    },
+    "table": {
+      "id": "so101-table/1",
+      "description": "Simple static tabletop below the fixed SO-101, with a target marker.",
+      "stage": "scenes/table.usda"
+    }
+  }
+}
