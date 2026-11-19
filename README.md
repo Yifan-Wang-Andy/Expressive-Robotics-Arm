@@ -2,20 +2,21 @@
 
 Python tools for generating, validating, and replaying SO-101 follower arm motion in NVIDIA Isaac Sim, with commanded and measured data exported for expressive-motion research.
 
-The current workflow accepts **radian CSV trajectories**, a **deterministic dummy trajectory generator**, or a **timed waypoint converter**, followed by a separate **Isaac Sim replay script**. Seeded random generation and expressive-state labels are future work. This project is self-contained and does not require the broader research archive.
+The current workflow accepts **Bandai V2 exact NPZ trajectories**, **radian CSV trajectories**, a **deterministic dummy trajectory generator**, or a **timed waypoint converter**, followed by a separate **Isaac Sim replay script**. Seeded random generation and expressive-state labels are future work. This project is self-contained and does not require the broader research archive.
 
 ## Current capabilities
 
 - Generate a smooth quintic out-and-back reference without Isaac Sim or a GPU.
 - Convert supplied joint waypoints into smooth, validated replay files without Isaac Sim.
 - Read CSV joint data and both time columns without robot assets or Isaac Sim; prepare supported SO-101 CSVs for replay using `robot_time_s`.
+- Prepare Bandai V2 SO-101 NPZ curves using their local robot clock, model provenance, and fixed gripper angle, without importing dataset code or SciPy.
 - Validate model limits, trajectory shape, timestamps, units, joint names, and asset identity.
 - Launch Isaac Sim, import the SO-101 follower, and replay saved angles through position-drive targets.
 - Map commands by joint name and record commanded positions, measured positions, and measured velocities separately.
 - Run with a window or headless, using explicit simulation-time control and physics schedules.
 - Select a named USD environment independently of the trajectory with `--scene`.
 
-The default motion moves `shoulder_pan` from **0 → 0.2 → 0 radians** over eight reference seconds. The other joints, including the gripper, remain at zero target. No ROS connection is required.
+The default dummy motion moves `shoulder_pan` from **0 → 0.2 → 0 radians** over eight reference seconds. The other joints, including the gripper, remain at zero target. No ROS connection is required.
 
 ## Requirements
 
@@ -108,6 +109,25 @@ not modified, and simulator tracking of this motion remains unverified.
 See [CSV input](docs/trajectory-input.md#read-csv-trajectories) for timing,
 initialization, and the distinction between reading and replay validation.
 
+For the updated **Bandai V2** package, keep the dataset in its external local
+directory and select a `so101.npz` file. This preserves the supplied cubic curve
+and nonlinear robot clock when preparing commands at 60 Hz. The package's
+SO-101 gripper is fixed at **0.35 rad**. Its sidecar JSON and model provenance
+are required; keep the original package directory structure intact.
+
+```sh
+export BANDAI_DATASET_ROOT="$HOME/Documents/Bandai_V2_Optimized_2026-11-16"
+python3 scripts/control_so101.py \
+  --trajectory "$BANDAI_DATASET_ROOT/motions/dataset_1/dataset-1_bow_tired_001/so101.npz" --check
+```
+
+The importer verifies the source URDF hash against the replay model and checks
+continuous interior limits plus sampled start/end rest boundaries. Existing
+limits remain unchanged: some V2 motions exceed the 1.5 rad/s reference speed
+or the 0.02 rad position margin and are rejected. The upstream interior rate
+certificate does not cover abrupt clip-end stops. See [Bandai V2 input](docs/trajectory-input.md#read-bandai-v2-exact-trajectories)
+for the required files and CSV alternative. Keep the package out of Git.
+
 ### 4. Launch Isaac Sim and replay
 
 Set the path to your existing Isaac Sim installation:
@@ -121,6 +141,23 @@ bash scripts/launch_isaacsim.sh --python scripts/control_so101.py \
 For a supported CSV that passes `--check`, pass its file path instead of the
 reference directory. The supplied SO-101 example above passes with the current
 project reference limits.
+
+For Bandai V2, [Standard_cmd.txt](Standard_cmd.txt) is a runnable Bash command
+file. Set the two installation/data locations once in your terminal, then run:
+
+```sh
+export ISAAC_SIM_PATH="$HOME/isaacsim-6.2.0"
+export BANDAI_DATASET_ROOT="$HOME/Documents/Bandai_V2_Optimized_2026-11-16"
+bash Standard_cmd.txt
+
+# Select another motion by passing its full path as the first argument.
+bash Standard_cmd.txt "$BANDAI_DATASET_ROOT/motions/dataset_1/dataset-1_bow_active_001/so101.npz"
+```
+
+The default is `motions/dataset_1/dataset-1_bow_tired_001/so101.npz` under
+`BANDAI_DATASET_ROOT`. You can instead set `MOTION` to another package-relative
+path before running the command file. Select data through this variable or the
+first argument; no changes to `scripts/launch_isaacsim.sh` are needed.
 
 Add `--headless` to replay without a window:
 
@@ -145,14 +182,14 @@ adds the SO-101 at the origin. Scene sources remain unchanged, and the selected
 scene is recorded in each run's logs. See [scene selection](docs/scene-selection.md)
 for stage requirements, custom catalogs, and a loop over scene/trajectory pairs.
 
-For more time to watch the small default shoulder rotation (about **11.5°** out and back):
+For more time to watch the dummy shoulder rotation (about **11.5°** out and back):
 
 ```sh
 bash scripts/launch_isaacsim.sh --python scripts/control_so101.py \
   --trajectory runs/my-trajectory --start-delay 5 --playback-speed 0.5
 ```
 
-`--playback-speed 0.5` presents the motion at half speed; slow rendering may make it take longer. `--exit-on-complete` restores automatic window closure for scripted runs. Start delay and speed apply only to windowed viewing. These options do not change the trajectory, physics timestep, or logged simulation times. Each sample is still held for one control interval, including the final sample: the default replay lasts **8 + 1/60 simulation seconds** and records 963 physics samples. Preview and final viewing render without advancing physics or adding measurements.
+`--playback-speed 0.5` presents the motion at half speed; slow rendering may make it take longer. `--exit-on-complete` restores automatic window closure for scripted runs. Start delay and speed apply only to windowed viewing. These options do not change the trajectory, physics timestep, or logged simulation times. Each sample is still held for one control interval, including the final sample: this eight-second reference replay lasts **8 + 1/60 simulation seconds** and records 963 physics samples. Preview and final viewing render without advancing physics or adding measurements.
 
 The terminal prints motion size, replay progress, `SO101_DEMO_COMPLETED`, and the saved log directory. A failure instead prints `SO101_DEMO_FAILED` and records the reason in that run's `metadata.json`. If an older version closed immediately, check this status first: closing was also the old behavior after a successful replay. Existing trajectories can be replayed again without regenerating them.
 
@@ -171,11 +208,12 @@ The launcher isolates inherited Python/Conda/library settings and prioritizes Is
 | [configs/so101-demo.json](configs/so101-demo.json) | Model, replay rates, drive gains, tracking thresholds, and scene policy |
 | [configs/isaacsim-runtime.json](configs/isaacsim-runtime.json) | Verified simulator build and runtime observations |
 
-The default scene has a fixed base, meters, Z-up, gravity −9.81 m/s², and no obstacles. Physics and measurements run at **120 Hz**, with held position commands at **60 Hz**. Existing generated references require a zero initial pose. CSV imports record `initial_pose_policy: "first_sample"` and initialize the arm directly at that pose before control; no approach from zero is added. The gripper remains at zero in both cases. The five arm joints and gripper are revolute; gripper commands use radians, not normalized 0–100 values.
+The default scene has a fixed base, meters, Z-up, gravity −9.81 m/s², and no obstacles. Physics and measurements run at **120 Hz**, with held position commands at **60 Hz**. Existing generated references require a zero initial pose. CSV and Bandai V2 imports record `initial_pose_policy: "first_sample"` and initialize the arm directly at that pose before control; no approach from zero is added. The gripper defaults to zero for existing references and CSVs. Bandai V2 NPZ imports read its fixed **0.35 rad** value from package metadata; CSV imports can explicitly select this with `--csv-gripper-rad 0.35`. The five arm joints and gripper are revolute; gripper commands use radians, not normalized 0–100 values.
 
 | Data | Files and schema | Arrays |
 |---|---|---|
 | Source CSV | `data/*.csv`; named header columns | Both time columns, source joint radians, and separate tool XYZ in meters |
+| Bandai V2 source | External `so101.npz`, sidecar `so101.json`, and package model provenance | Cubic joint coefficients and nonlinear robot clock; distinct from the reference schema |
 | Reference | `trajectory.npz` + `metadata.json`; `so101-trajectory/1` | `timestamps_s` `[N]`, `positions_rad` `[N, 6]` |
 | Replay log | `motion.npz` + `metadata.json`; `so101-control-log/1` | `timestamps_s` `[M]`, `commanded_positions_rad`, `measured_positions_rad`, `measured_velocities_rad_s` `[M, 6]` |
 
@@ -183,7 +221,18 @@ Metadata defines column order, units, model hash/revision, resolved settings, ge
 
 Use `isaacsim_trajectories.trajectory.load_trajectory(Path(...))` for saved reference directories and `isaacsim_trajectories.demo_log.load_log(Path(...))` for measured logs. Both validate their schemas and load NPZ with pickle disabled. Use `scripts/read_trajectory.py INPUT.csv` to inspect source CSV data. A CSV replay archives the normalized reference and unchanged `source.csv` under its run's `reference/` directory, retaining both source clocks and tool coordinates. The tool coordinate frame is unknown and those values are not simulator measurements. User CSVs in `data/`, generated data, simulator caches, and downloaded assets are ignored by Git.
 
+A Bandai V2 replay also archives its prepared reference and required source NPZ/provenance under the ignored run directory. Its metadata retains the supplied `base_link`/`gripper_frame_link` identities and verified source model hash. Prepared reference directories can be replayed independently of the external package. Source FK context is not measured simulator motion.
+
 ## Tests and verification
+
+On 2026-11-19, **106 offline tests passed with zero skipped**, including Bandai V2
+continuous-curve validation, fixed gripper handling, and source archival. Six
+local V2 clips were checked: three bow clips passed; three others were rejected
+by the existing limits. NPZ positions matched the supplied CSVs within
+1.14e-10 rad. Preflight through `Standard_cmd.txt` also passed using Isaac Sim's
+bundled Python. **Simulator replay was skipped**: no NVIDIA device was exposed
+to this session, and `nvidia-smi` could not communicate with the driver. See
+[the V2 verification record](docs/verification.md#bandai-v2-input-checks).
 
 On 2026-11-05, **85 offline tests passed with zero skipped**, including CSV
 parsing, robot-time resampling, source preservation, and direct CSV replay
@@ -206,6 +255,8 @@ On 2026-10-28, **65 offline tests passed with zero skipped**, including scene se
 ## Limits and next steps
 
 The dummy generator and waypoint converter check their continuous quintic references analytically; replay screens stored samples with finite differences, including transitions from/to rest. CSV input is linearly resampled on the control grid using robot time, with the last pose held through the next grid boundary when needed. Linear interpolation can have velocity discontinuities at source rows; replay screening is not a continuous acceleration proof. The converter uses supplied waypoints and does not yet sample random poses. Asset position/velocity/effort limits and project-selected margins/gains are recorded explicitly. These checks do not establish collision freedom or measured dynamic feasibility.
+
+Bandai V2 NPZ preparation checks the continuous interior joint curve under its local clock before sampling. Replay still holds sampled drive targets, pads the endpoint to the next control tick, and checks sampled rest boundaries. The source curve and its validation are not a claim of measured tracking or valid endpoint stops for every clip.
 
 Self-collision is disabled. Workspace/collision checks and measured acceleration validation are unimplemented. There is no Cartesian planner, inverse kinematics, ROS bridge, physical robot controller, or validated expressive-state mapping. The next milestone is seeded smooth waypoint generation, additional validation, and a small replay batch before producing research datasets.
 

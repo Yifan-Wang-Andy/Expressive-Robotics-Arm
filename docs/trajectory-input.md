@@ -1,10 +1,80 @@
 # Trajectory input and waypoint conversion
 
-The replay script accepts a **reference directory or a named SO-101 CSV**, passed
+The replay script accepts a **reference directory, named SO-101 CSV, or Bandai V2 SO-101 NPZ**, passed
 as `--trajectory PATH`. A reference directory contains `trajectory.npz` with the
 sampled motion and `metadata.json` describing the motion and robot. CSV input is
 prepared on the configured control grid before replay. A JSON waypoint file is
-an input to the converter, not a direct input to replay.
+an input to the converter, not a direct input to replay. A Bandai V2 NPZ uses its
+own source format and requires the original package metadata described below.
+
+## Read Bandai V2 exact trajectories
+
+Keep `Bandai_V2_Optimized_2026-11-16` outside this repository. Its `index.csv`
+lists motions by dataset, action, style, take, and robot. Choose the `so101`
+row's `exact_trajectory_npz` path; Gen3 trajectories cannot drive this SO-101.
+
+```sh
+export BANDAI_DATASET_ROOT="$HOME/Documents/Bandai_V2_Optimized_2026-11-16"
+TRAJECTORY="$BANDAI_DATASET_ROOT/motions/dataset_1/dataset-1_bow_tired_001/so101.npz"
+
+python3 scripts/control_so101.py --trajectory "$TRAJECTORY" --check
+bash scripts/launch_isaacsim.sh --python scripts/control_so101.py \
+  --trajectory "$TRAJECTORY" --start-delay 5
+```
+
+Set `ISAAC_SIM_PATH` before the simulator command. To switch motions, change
+only `TRAJECTORY`. The runnable `Standard_cmd.txt` also accepts a full trajectory
+path as its first argument, or a package-relative path through the `MOTION`
+environment variable. Its default selects the tired-bow example above. Do not
+edit the Isaac Sim launch helper to choose a data file.
+
+The source package must retain this structure:
+
+```text
+Bandai_V2_Optimized_2026-11-16/
+  motions/dataset_N/SOURCE_STEM/so101.npz
+  motions/dataset_N/SOURCE_STEM/so101.json
+  provenance/robot_models/so101/waypoint_model.json
+  provenance/robot_models/so101/model.urdf
+```
+
+The importer loads NPZ arrays with pickle disabled and evaluates the supplied
+cubic joint polynomial plus its local robot clock with NumPy only. It does not
+execute the package's reader code. Source arrays are `path_c`, `path_x`, `grid`,
+`squared_speed`, `clock`, and `joint_names`; these are distinct from this
+project's `so101-trajectory/1` arrays. Joint radians are mapped by name. The
+source URDF hash must match both the package model and the configured replay
+model. Sidecar units and frame metadata are retained, including `base_link`
+and `gripper_frame_link`. The fixed gripper angle is read from
+`waypoint_model.json` (**0.35 rad** for this delivery).
+
+The robot clock is nonlinear relative to source progress. No uniform slowdown
+factor is substituted. Preparation samples the exact source curve on the
+configured control grid (60 Hz by default), then pads the final pose to the
+next tick. The simulator starts at the first pose without an approach from
+zero and holds each command for one control interval, including the last row.
+
+Continuous interior position, velocity, and acceleration are checked before
+the existing sampled checks, including start/end rest boundaries. No source
+positions, timing, limits, or margins are silently changed. Some supplied clips
+are incompatible with the current replay envelope: `dataset-1_kick_normal_001`
+exceeds the 1.5 rad/s cap, and `dataset-1_dance-long_normal_001` violates the
+0.02 rad position margin. The package's interior rate certificate excludes
+clip-end stops; endpoint velocities need not be zero. A successful source
+export therefore does not guarantee replay acceptance.
+
+Replay archives the source NPZ, required provenance, and prepared reference
+under the ignored `runs/so101-.../reference/` directory. Saved prepared references
+can subsequently be replayed without the original package. Keep the external
+dataset and its contents out of Git. Collision/workspace, jerk, measured
+acceleration, and expressive validity remain unchecked; dataset eligibility
+remains false.
+
+For a **CSV preview** of the same package, select `so101.csv` and pass
+`--csv-gripper-rad 0.35`. CSV preparation linearly interpolates the sampled
+waypoints using `robot_time_s`; this changes derivatives and does not reproduce
+the supplied continuous curve or inherit its certificate. A bare CSV does not
+verify source calibration or tool-coordinate frames.
 
 ## Read CSV trajectories
 
@@ -49,8 +119,10 @@ there is no automatic speed adjustment or smoothing. Linear interpolation can
 produce velocity jumps at source knots, so continuous acceleration is unchecked.
 
 The five SO-101 arm joints are mapped by name. An omitted gripper is explicitly
-filled with zero under the configured fixed-gripper policy; a supplied gripper
-must also remain zero for replay. CSV references record
+filled with zero by default. Use `--csv-gripper-rad VALUE` to select another
+fixed angle, such as `0.35` for Bandai V2; a supplied gripper column must remain
+at that selected value. The angle must satisfy the same position limits and
+margin as other joints. CSV references record
 `initial_pose_policy: "first_sample"`: the simulator initializes directly at the
 first CSV pose before advancing physics, including when that pose is nonzero.
 No approach motion from zero is inserted. Existing references without this
@@ -241,6 +313,12 @@ simulation seconds**.
 - Scene and end-effector identities, control/physics intervals, analytic
   validation in `validation.joint_reference`, sampled validation in
   `validation.replay_screen`, applied limits, and unchecked properties.
+
+Prepared CSV and Bandai V2 references also record
+`initial_pose_policy: "first_sample"`. Optional top-level `fixed_gripper_rad`
+declares the constant gripper angle used during replay; omission retains the
+zero-gripper default for older references. This does not enable gripper motion
+or change the waypoint converter's zero-gripper input policy.
 
 Use the existing loader to inspect output without Isaac Sim:
 

@@ -322,6 +322,67 @@ dynamic tracking, continuous acceleration, collisions, and workspace validity
 remain unverified. The configured acceleration threshold is a project choice
 for sampled reference screening, not a manufacturer limit.
 
+## Bandai V2 input checks
+
+On **2026-11-19**, inspected the external local delivery
+`/home/yifan/Documents/Bandai_V2_Optimized_2026-11-16`. Its summary lists 3,077
+recordings and 3,077 SO-101 trajectories. The source and replay new-calibration
+URDF bytes both hash to
+`3a65d2d35e68a8d2f0c2cc176d19b884506543c93ba72980145b80abe276022c`.
+The delivery specifies `base_link` / `gripper_frame_link`, radians/seconds,
+and a fixed gripper angle of 0.35 rad. Its nonlinear robot clock is used without
+retiming; CSV previews remain a separate linear interpolation mode.
+
+Executed commands (artifacts below are local and ignored by Git):
+
+```sh
+PYTHONPATH=src python3 -m unittest discover -s tests -v > runs/bandai-v2-check-oLREGGcf/offline-tests.log 2>&1
+python3 -m compileall -q src scripts
+bash -n Standard_cmd.txt scripts/launch_isaacsim.sh
+git diff --check
+
+ISAAC_SIM_PATH=/home/yifan/isaacsim-6.2.0 BANDAI_DATASET_ROOT=/home/yifan/Documents/Bandai_V2_Optimized_2026-11-16 bash Standard_cmd.txt --check > runs/bandai-v2-check-oLREGGcf/bundled-preflight.json
+ISAAC_SIM_PATH=/home/yifan/isaacsim-6.2.0 BANDAI_DATASET_ROOT=/home/yifan/Documents/Bandai_V2_Optimized_2026-11-16 bash Standard_cmd.txt /home/yifan/Documents/Bandai_V2_Optimized_2026-11-16/motions/dataset_1/dataset-1_bow_active_001/so101.npz --check > runs/bandai-v2-check-oLREGGcf/bundled-explicit-file.json
+python3 scripts/control_so101.py --trajectory /home/yifan/Documents/Bandai_V2_Optimized_2026-11-16/motions/dataset_1/dataset-1_bow_tired_001/so101.csv --csv-gripper-rad 0.35 --check > runs/bandai-v2-check-oLREGGcf/csv-preflight.json
+python3 runs/bandai-v2-check-oLREGGcf/verify_batch.py
+```
+
+All commands above exited 0. **106 offline tests passed, zero skipped**. New
+synthetic cases cover analytic extrema hidden between control samples, a
+changing local clock, inconsistent clocks, joint ordering, source hash/units,
+fixed gripper limits, input preservation, archival hashes, source-change
+rejection before archiving, and prepared-reference replay after removing the
+source package. The bundled-Python preflights load no simulator application.
+
+The six-clip check compared exact NPZ evaluation at the supplied CSV timestamps
+with every CSV joint row, without executing the delivery's reader code. The
+maximum discrepancy was 1.14e-10 rad, consistent with the CSV's ten-decimal
+rounding. `batch-report.json` records each path and result:
+
+| Motion | Preflight result |
+|---|---|
+| Dataset 1, bow tired 001 | Passed; 349 reference samples, 5.8 s padded duration |
+| Dataset 1, bow active 001 | Passed; 383 reference samples |
+| Dataset 1, bow angry 001 | Passed; 222 reference samples |
+| Dataset 1, kick normal 001 | Rejected: continuous shoulder-lift speed 1.51653 rad/s exceeds 1.5 rad/s |
+| Dataset 1, dance-long normal 001 | Rejected: shoulder-lift position margin |
+| Dataset 2, raise-up-both-hands active 001 | Rejected: shoulder-lift position margin |
+
+The default tired-bow NPZ has exact duration 5.7844186598 s, endpoint padding
+0.0155813402 s, sampled peak speed 0.3895195 rad/s, and sampled acceleration
+including rest boundaries 16.9527345 rad/s². Its continuous interior peak
+acceleration is approximately 1.99255 rad/s². These are reference properties;
+the continuous and sampled checks have different scopes. Limits and margins
+were not changed. The full package was not batch-validated by this project.
+
+**Simulator checks were skipped.** The installed version file still identifies
+`6.2.0-rc.14+release.52805.02189a84.gl`, but `/dev/nvidia*` was absent and
+`nvidia-smi --query-gpu=name,driver_version --format=csv,noheader` exited 9,
+unable to communicate with the NVIDIA driver. No new windowed/headless
+physics replay or measured tracking result is claimed. Collision/workspace,
+jerk, measured acceleration, and expressive validity remain unchecked;
+dataset eligibility is false. The dataset remained external and unmodified.
+
 ## Interpretation and remaining checks
 
 These runs establish the demonstrated importer, command schedule, file handoff, name mapping, measured-state logging, and windowed visibility for the recorded setup. They do not establish hardware safety, collision freedom, or expressive validity. Gains and reference limits are project-selected demonstration settings rather than calibrated motor specifications. Self-collision is disabled; workspace/collision checks and measured acceleration validation remain unimplemented. Initial/midpoint viewport captures were inspected for the updated separated workflow; full-editor startup remains unresolved.

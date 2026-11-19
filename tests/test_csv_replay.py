@@ -79,12 +79,12 @@ class CsvReplayIntegrationTests(unittest.TestCase):
     def arguments(self, path=None):
         return ["--trajectory", str(path or self.input), "--config", str(self.config_path)]
 
-    def prepare(self, path=None):
-        return self.module.prepare(self.module.parse_args(self.arguments(path)))
+    def prepare(self, path=None, extra=()):
+        return self.module.prepare(self.module.parse_args([*self.arguments(path), *extra]))
 
-    def check(self):
+    def check(self, extra=()):
         return subprocess.run(
-            [sys.executable, str(SCRIPT), *self.arguments(), "--check"],
+            [sys.executable, str(SCRIPT), *self.arguments(), *extra, "--check"],
             cwd=self.directory, text=True, capture_output=True)
 
     def inspect(self):
@@ -141,6 +141,58 @@ class CsvReplayIntegrationTests(unittest.TestCase):
         self.assertIn("Gen3", completed.stderr)
         self.assertIn("SO-101", completed.stderr)
         self.assertNotIn("ModuleNotFoundError", completed.stderr)
+
+    def test_explicit_fixed_gripper_survives_mapping_and_archived_replay(self):
+        before = self.snapshot()
+        extra = ["--csv-gripper-rad", "0.35"]
+        completed = self.check(extra)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        config, _, _, metadata, arrays, _ = self.prepare(extra=extra)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(config["gripper_policy"], "hold fixed radians")
+        self.assertEqual(metadata["fixed_gripper_rad"], .35)
+        self.assertEqual(metadata["initial_pose_policy"], "first_sample")
+        np.testing.assert_array_equal(arrays["positions_rad"][0], [.2, -.3, .4, .1, .01, .35])
+        np.testing.assert_array_equal(arrays["positions_rad"][:, -1], np.full(121, .35))
+        output = self.directory / "fixed-gripper-run"
+        output.mkdir()
+        self.module.archive_reference(self.input, output, metadata, arrays)
+        _, _, _, reloaded, replay_arrays, _ = self.prepare(output / "reference")
+        self.assertEqual(reloaded, metadata)
+        np.testing.assert_array_equal(replay_arrays["positions_rad"], arrays["positions_rad"])
+        self.assertEqual((output / "reference/source.csv").read_bytes(), before["source.csv"])
+
+    def test_fixed_gripper_override_rejects_invalid_values_and_non_csv_inputs(self):
+        for value in ("nan", "inf", "-inf", "2.1"):
+            with self.subTest(value=value):
+                completed = self.check([f"--csv-gripper-rad={value}"])
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertNotIn("ModuleNotFoundError", completed.stderr)
+        _, _, _, metadata, arrays, _ = self.prepare()
+        reference = self.directory / "reference"
+        save_trajectory(reference, metadata, arrays)
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), *self.arguments(reference),
+             "--csv-gripper-rad", "0.35", "--check"],
+            text=True, capture_output=True)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("CSV", completed.stderr)
+
+    def test_supplied_gripper_column_must_match_requested_fixed_value(self):
+        header = self.header + ["gripper"]
+        rows = [row + [.35] for row in self.rows]
+        self.write(header, rows)
+        extra = ["--csv-gripper-rad", "0.35"]
+        completed = self.check(extra)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        # An explicit source command is never overwritten to hide motion.
+        rows[1][-1] = .36
+        self.write(header, rows)
+        before = self.snapshot()
+        completed = self.check(extra)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("gripper", completed.stderr)
+        self.assertEqual(self.snapshot(), before)
 
     def test_source_position_velocity_and_sampled_acceleration_failures_remain_errors(self):
         for value, expected in ((2.1, "positions"), (1.0, "velocity"), (.3, "acceleration")):

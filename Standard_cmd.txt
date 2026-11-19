@@ -1,4 +1,30 @@
-export ISAAC_SIM_PATH=/home/yifan/isaacsim-6.2.0
-bash scripts/launch_isaacsim.sh --python scripts/control_so101.py \
-  --trajectory runs/my-trajectory \
-  --start-delay 5
+#!/usr/bin/env bash
+# Run with: bash Standard_cmd.txt [trajectory-file] [control_so101.py options]
+# Set these local paths once in your terminal before replay:
+# export ISAAC_SIM_PATH="$HOME/isaacsim-6.2.0"
+# export BANDAI_DATASET_ROOT="$HOME/Documents/Bandai_V2_Optimized_2026-11-16"
+
+export ISAAC_SIM_PATH="$HOME/isaacsim-6.2.0"
+export BANDAI_DATASET_ROOT="$HOME/Documents/Bandai_V2_Optimized_2026-11-16"
+
+set -euo pipefail
+
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+cd -- "$project_dir"
+
+# Change this relative path to select another motion from the package.
+# An exported MOTION variable also overrides it without editing this file.
+MOTION="${MOTION:-motions/dataset_1/dataset-1_bow_tired_001/so101.npz}"
+if [[ $# -gt 0 && "$1" != --* ]]; then
+    TRAJECTORY="$1"
+    shift
+else
+    : "${BANDAI_DATASET_ROOT:?Export BANDAI_DATASET_ROOT to the local dataset directory, or pass a trajectory file as the first argument.}"
+    TRAJECTORY="$BANDAI_DATASET_ROOT/$MOTION"
+fi
+
+# NPZ preserves V2's optimized curve and reads its fixed 0.35-rad gripper.
+# For a V2 CSV preview, pass so101.csv and --csv-gripper-rad 0.35 explicitly.
+# launch_isaacsim.sh handles the runtime; trajectory selection belongs here.
+exec bash scripts/launch_isaacsim.sh --python scripts/control_so101.py \
+    --trajectory "$TRAJECTORY" --start-delay 5 "$@"

@@ -107,18 +107,26 @@ def read_csv_trajectory(path: Path, *, max_rows: int = 1_000_000) -> tuple[dict,
     return metadata, arrays
 
 
+def _fixed_gripper(config: dict) -> float:
+    policy = config.get("gripper_policy")
+    if policy == "hold zero radians":
+        return 0.0
+    if policy == "hold fixed radians":
+        return _finite_number(config.get("fixed_gripper_rad"), "fixed_gripper_rad")
+    raise ValueError("CSV replay requires a fixed gripper_policy")
+
+
 def _so101_positions(metadata: dict, arrays: dict, config: dict) -> Any:
     import numpy as np
 
     if metadata["layout"] != "so101":
         raise ValueError("Gen3 joint_1 through joint_7 cannot be replayed on the SO-101; "
                          "use the CSV with named SO-101 joints. Automatic joint remapping is unsupported.")
-    if config.get("gripper_policy") != "hold zero radians":
-        raise ValueError("CSV replay requires gripper_policy: hold zero radians")
+    fixed_gripper = _fixed_gripper(config)
     names = metadata["joint_names"]
     raw = arrays["positions_rad"]
     return np.column_stack([
-        raw[:, names.index(name)] if name in names else np.zeros(len(raw))
+        raw[:, names.index(name)] if name in names else np.full(len(raw), fixed_gripper)
         for name in JOINT_NAMES
     ])
 
@@ -154,7 +162,8 @@ def csv_to_reference(
     source_csv = {
         **metadata, "time_column": "robot_time_s", "time_origin_s": float(arrays["robot_time_s"][0]),
         "source_duration_s": float(times[-1]),
-        "gripper": "supplied CSV column" if "gripper" in metadata["joint_names"] else "inserted fixed zero radians",
+        "gripper": "supplied CSV column" if "gripper" in metadata["joint_names"] else
+                   f"inserted fixed {_fixed_gripper(config):g} radians",
         "asset_binding": "named joint angles interpreted using the configured SO-101 URDF; source calibration unverified",
         "raw_context": "both timestamps and tool XYZ preserved in source.csv when archived for replay",
     }
@@ -168,6 +177,7 @@ def csv_to_reference(
             "retiming": "none; subtract timestamp origin and pad final pose to next control tick",
         },
         "source_csv": source_csv, "initial_pose_policy": "first_sample",
+        "fixed_gripper_rad": _fixed_gripper(config),
         "code": code if code is not None else {"revision": None, "dirty": None},
         "joint_names": list(JOINT_NAMES), "joint_types": ["revolute"] * len(JOINT_NAMES),
         "units": {"time": "seconds", "positions": "radians"}, "control_hz": hz,
@@ -204,8 +214,9 @@ def validate_csv_source(metadata: dict, arrays: dict, model: dict, config: dict)
         raise ValueError("position_margin_rad must be nonnegative")
     maximum_speed = _finite_number(config.get("reference_velocity_limit_rad_s"),
                                    "reference_velocity_limit_rad_s", positive=True)
-    if not np.allclose(positions[:, -1], 0.0, rtol=0, atol=1e-12):
-        raise ValueError("CSV replay requires the gripper held at zero")
+    fixed_gripper = _fixed_gripper(config)
+    if not np.allclose(positions[:, -1], fixed_gripper, rtol=0, atol=1e-12):
+        raise ValueError(f"CSV replay requires the gripper held at {fixed_gripper:g} radians")
     with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
         speeds = np.abs(np.diff(positions, axis=0) / np.diff(arrays["robot_time_s"])[:, None])
     peaks = {}

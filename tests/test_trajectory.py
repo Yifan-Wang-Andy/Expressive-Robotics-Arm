@@ -142,6 +142,29 @@ class TrajectoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "velocity"):
             self.replay()
 
+    def test_declared_fixed_gripper_follows_joint_names_and_keeps_limits(self):
+        metadata = {**self.metadata, "initial_pose_policy": "first_sample", "fixed_gripper_rad": .35,
+                    "joint_names": list(reversed(JOINT_NAMES))}
+        positions = self.arrays["positions_rad"].copy()
+        positions[:, -1] = .35
+        arrays = {**self.arrays, "positions_rad": positions[:, ::-1].copy()}
+        self.replay(metadata, arrays)
+        arrays["positions_rad"][2, 0] += .001
+        with self.assertRaisesRegex(ValueError, "gripper"):
+            self.replay(metadata, arrays)
+        arrays["positions_rad"][:, 0] = 1.0
+        with self.assertRaisesRegex(ValueError, "positions"):
+            self.replay({**metadata, "fixed_gripper_rad": 1.0}, arrays)
+        # Nonzero gripper metadata does not disable the default zero-start rule.
+        arrays["positions_rad"][:, 0] = .35
+        with self.assertRaisesRegex(ValueError, "initial pose"):
+            self.replay({**metadata, "initial_pose_policy": "zero"}, arrays)
+
+    def test_fixed_gripper_declaration_requires_a_finite_number(self):
+        for value in (True, "0.35", None, float("nan"), float("inf")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_trajectory({**self.metadata, "fixed_gripper_rad": value}, self.arrays)
+
     def test_unsafe_archive_and_unexpected_arrays_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

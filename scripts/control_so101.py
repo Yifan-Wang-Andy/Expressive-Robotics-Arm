@@ -27,6 +27,7 @@ from isaacsim_trajectories.trajectory import load_trajectory, save_trajectory, v
 from isaacsim_trajectories.csv_trajectory import (
     csv_to_reference, read_csv_trajectory, validate_csv_source,
 )
+from isaacsim_trajectories.bandai_trajectory import bandai_to_reference
 from isaacsim_trajectories.scenes import load_scene_catalog, resolve_scene
 
 
@@ -49,7 +50,9 @@ def render_until(is_running: Callable[[], bool], render: Callable[[], None],
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--trajectory", type=Path,
-                        help="Reference directory (trajectory.npz + metadata.json), or named SO-101 CSV using robot_time_s")
+                        help="Reference directory, named SO-101 CSV, or Bandai V2 motions/.../so101.npz (exact curve and robot clock)")
+    parser.add_argument("--csv-gripper-rad", type=float,
+                        help="Fixed CSV gripper angle in radians (default: 0; Bandai V2 CSVs use 0.35). NPZ reads its package model.")
     parser.add_argument("--scene", default="empty", help="Scene name in the catalog (default: empty)")
     parser.add_argument("--scenes-config", type=Path, default=PROJECT / "configs/scenes.json",
                         help="Scene catalog JSON; stage paths are relative to this file")
@@ -67,6 +70,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.trajectory is None and not args.list_scenes:
         parser.error("--trajectory is required unless --list-scenes is used")
+    if args.csv_gripper_rad is not None:
+        if not math.isfinite(args.csv_gripper_rad):
+            parser.error("--csv-gripper-rad must be finite")
+        if args.trajectory is None or args.trajectory.suffix.lower() != ".csv":
+            parser.error("--csv-gripper-rad is only supported with a CSV trajectory")
     if not math.isfinite(args.start_delay) or args.start_delay < 0:
         parser.error("--start-delay must be finite and nonnegative")
     if not math.isfinite(args.playback_speed) or args.playback_speed <= 0:
@@ -84,6 +92,9 @@ def prepare(args: argparse.Namespace) -> tuple:
     config["urdf"] = str(urdf)
     model = load_model(urdf)
     if args.trajectory.suffix.lower() == ".csv":
+        if args.csv_gripper_rad is not None:
+            config["gripper_policy"] = "hold fixed radians"
+            config["fixed_gripper_rad"] = args.csv_gripper_rad
         csv_metadata, csv_arrays = read_csv_trajectory(args.trajectory)
         trajectory_metadata, trajectory_arrays = csv_to_reference(
             csv_metadata, csv_arrays, model, config, code=git_identity(PROJECT),
@@ -91,8 +102,14 @@ def prepare(args: argparse.Namespace) -> tuple:
         trajectory_metadata["validation"]["csv_source"] = validate_csv_source(
             csv_metadata, csv_arrays, model, config,
         )
+    elif args.trajectory.suffix.lower() == ".npz":
+        trajectory_metadata, trajectory_arrays = bandai_to_reference(
+            args.trajectory, model, config, code=git_identity(PROJECT),
+        )
     else:
         trajectory_metadata, trajectory_arrays = load_trajectory(args.trajectory)
+    config["fixed_gripper_rad"] = trajectory_metadata.get("fixed_gripper_rad", 0.0)
+    config["gripper_policy"] = "hold fixed radians" if config["fixed_gripper_rad"] else "hold zero radians"
     validation = validate_for_replay(
         trajectory_metadata, trajectory_arrays, model,
         physics_hz=config["physics_hz"], control_hz=config["control_hz"],
@@ -114,18 +131,31 @@ def prepare(args: argparse.Namespace) -> tuple:
 
 
 def archive_reference(input_path: Path, output_directory: Path, metadata: dict, arrays: dict) -> dict:
-    """Archive a CSV and its exact replay reference before simulator startup."""
+    """Archive external inputs and their exact prepared reference before startup."""
     input_path = Path(input_path).resolve()
     directory = input_path
     files = ["metadata.json", "trajectory.npz"]
+    sources = []
     if input_path.suffix.lower() == ".csv":
-        source = input_path.read_bytes()
-        if hashlib.sha256(source).hexdigest() != metadata["source_csv"]["source"]["sha256"]:
-            raise ValueError("Source CSV changed after validation; check the input again before replay")
+        sources = [{"path": str(input_path), "archive_name": "source.csv",
+                    "sha256": metadata["source_csv"]["source"]["sha256"]}]
+    elif input_path.suffix.lower() == ".npz":
+        sources = metadata["source_bandai"]["source_files"]
+    if sources:
+        contents = {}
+        for item in sources:
+            name = item["archive_name"]
+            if Path(name).name != name or name in files or name in contents:
+                raise ValueError("Invalid or duplicate source archive filename")
+            source = Path(item["path"]).read_bytes()
+            if hashlib.sha256(source).hexdigest() != item["sha256"]:
+                raise ValueError(f"Source {name} changed after validation; check the input again before replay")
+            contents[name] = source
         directory = output_directory / "reference"
         save_trajectory(directory, metadata, arrays)
-        (directory / "source.csv").write_bytes(source)
-        files.append("source.csv")
+        for name, source in contents.items():
+            (directory / name).write_bytes(source)
+        files.extend(contents)
     return {
         "input_path": str(input_path), "directory": str(directory), "metadata": metadata,
         "files_sha256": {name: hashlib.sha256((directory / name).read_bytes()).hexdigest() for name in files},
@@ -456,6 +486,11 @@ def main() -> None:
         raise SystemExit(2) from None
     if args.check:
         print(json.dumps({"urdf": str(urdf), "trajectory_id": trajectory_metadata["trajectory_id"],
+                          "input_path": str(args.trajectory.resolve()),
+                          "generator": trajectory_metadata["generator"],
+                          "fixed_gripper_rad": trajectory_metadata.get("fixed_gripper_rad", 0.0),
+                          "reference_preparation": trajectory_metadata.get("timing", {}),
+                          "source_validation": trajectory_metadata.get("validation", {}),
                           "scene": config["scene"], "validation": validation}, indent=2))
         return
     run_root = PROJECT / "runs"
